@@ -375,6 +375,11 @@ input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}
 .from-slate-900{--tw-gradient-from:#0f172a var(--tw-gradient-from-position);--tw-gradient-to:rgba(15,23,42,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}
 .to-emerald-600{--tw-gradient-to:#059669 var(--tw-gradient-to-position)}
 .to-slate-850{--tw-gradient-to:#172033 var(--tw-gradient-to-position)}
+.from-emerald-600\/20{--tw-gradient-from:rgba(5,150,105,.2) var(--tw-gradient-from-position);--tw-gradient-to:rgba(5,150,105,0) var(--tw-gradient-to-position);--tw-gradient-stops:var(--tw-gradient-from),var(--tw-gradient-to)}
+.to-green-500\/10{--tw-gradient-to:rgba(34,197,94,.1) var(--tw-gradient-to-position)}
+.border-emerald-600\/30{border-color:rgba(5,150,105,.3)}
+.text-emerald-300{color:#6ee7b7}
+.leading-relaxed{line-height:1.625}
 .shadow-lg{--tw-shadow:0 10px 15px -3px rgba(0,0,0,.1),0 4px 6px -4px rgba(0,0,0,.1);box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}
 .shadow-xl{--tw-shadow:0 20px 25px -5px rgba(0,0,0,.1),0 8px 10px -6px rgba(0,0,0,.1);box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}
 .shadow-2xl{--tw-shadow:0 25px 50px -12px rgba(0,0,0,.25);box-shadow:var(--tw-ring-offset-shadow,0 0 #0000),var(--tw-ring-shadow,0 0 #0000),var(--tw-shadow)}
@@ -524,6 +529,23 @@ input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}
                         </div>
                         <h3 class="text-xl font-black text-slate-300" id="balance-paid">R$ 0,00</h3>
                         <p class="text-[10px] text-slate-500 mt-0.5" id="balance-paid-count">0 liquidados</p>
+                    </div>
+                </div>
+
+                <!-- TOTAL GERAL DE RECEBIMENTOS (já recebido + a receber) -->
+                <div class="bg-gradient-to-r from-emerald-600/20 to-green-500/10 border border-emerald-600/30 p-4 rounded-2xl">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="flex items-center gap-2 text-emerald-400 mb-1">
+                                <i class="fa-solid fa-sack-dollar"></i>
+                                <span class="text-xs font-bold">Total de Recebimentos</span>
+                            </div>
+                            <h3 class="text-2xl font-black text-emerald-300" id="balance-total-receivables">R$ 0,00</h3>
+                        </div>
+                        <div class="text-right text-[10px] text-slate-400 leading-relaxed">
+                            <p>Já recebi: <span class="text-emerald-400 font-bold" id="ttr-received">R$ 0,00</span></p>
+                            <p>A receber: <span class="text-green-400 font-bold" id="ttr-pending">R$ 0,00</span></p>
+                        </div>
                     </div>
                 </div>
 
@@ -1187,6 +1209,12 @@ input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}
             document.getElementById('balance-received-count').textContent = `${receivedCount} liquidado(s)`;
             document.getElementById('balance-paid').textContent = formatBRL(paid);
             document.getElementById('balance-paid-count').textContent = `${paidCount} liquidado(s)`;
+
+            // Total geral de recebimentos = já recebido + ainda a receber
+            const totalReceivables = received + totalReceive;
+            document.getElementById('balance-total-receivables').textContent = formatBRL(totalReceivables);
+            document.getElementById('ttr-received').textContent = formatBRL(received);
+            document.getElementById('ttr-pending').textContent = formatBRL(totalReceive);
 
             renderTransactions();
         }
@@ -1932,9 +1960,12 @@ input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}
             closeModal('modal-share');
         });
 
-        // Permite logar com Enter
-        document.getElementById('login-pass').addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') login();
+        // Permite logar com Enter em qualquer campo do login
+        ['login-user', 'login-pass'].forEach(fieldId => {
+            const el = document.getElementById(fieldId);
+            if (el) el.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') { e.preventDefault(); login(); }
+            });
         });
 
         // INÍCIO
