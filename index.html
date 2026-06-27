@@ -786,6 +786,22 @@ input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}
                 </div>
             </div>
         </div>
+
+        <!-- MODAL: CONFIRMAR IMPORTAÇÃO (RESTAURAR BACKUP) -->
+        <div id="modal-confirm-import" class="modal fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+            <div class="modal-content bg-slate-900 w-full max-w-sm rounded-3xl border border-slate-800 p-6 flex flex-col items-center text-center shadow-2xl">
+                <div class="w-16 h-16 rounded-full bg-yellow-500/20 text-yellow-500 flex items-center justify-center text-3xl mb-4">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                </div>
+                <h3 class="text-xl font-black text-white mb-2">Restaurar Backup</h3>
+                <p class="text-sm text-slate-400 mb-4">Isto vai <b class="text-red-400">apagar todos os dados atuais</b> na nuvem e substituí-los pelos do arquivo. Não pode ser desfeito.</p>
+                <div class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 mb-5" id="import-summary"></div>
+                <div class="flex w-full gap-3">
+                    <button onclick="closeModal('modal-confirm-import')" class="flex-1 bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 rounded-xl transition">Cancelar</button>
+                    <button onclick="confirmImport()" id="btn-confirm-import" class="flex-1 bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-black py-3 rounded-xl transition shadow-lg">Restaurar</button>
+                </div>
+            </div>
+        </div>
         <div id="modal-settings" class="modal fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
             <div class="modal-content bg-slate-900 w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-slate-800 p-6 flex flex-col max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-5">
@@ -818,12 +834,16 @@ input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}
 
                     <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-2.5">
                         <label class="block text-xs font-bold text-slate-400">Backup de Segurança</label>
-                        <div class="grid grid-cols-1 gap-2">
+                        <div class="grid grid-cols-2 gap-2">
                             <button onclick="exportBackup()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition">
-                                <i class="fa-solid fa-download"></i> Baixar cópia (.json)
+                                <i class="fa-solid fa-download"></i> Baixar cópia
+                            </button>
+                            <button onclick="triggerImport()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition">
+                                <i class="fa-solid fa-upload"></i> Restaurar
                             </button>
                         </div>
-                        <p class="text-[9px] text-slate-500 leading-tight">Seus dados ficam salvos na nuvem (Supabase) e sincronizam entre dispositivos. O botão acima baixa uma cópia local de segurança.</p>
+                        <input type="file" id="import-file-input" accept=".json,application/json" class="hidden" onchange="importBackup(event)">
+                        <p class="text-[9px] text-slate-500 leading-tight">Seus dados ficam na nuvem (Supabase) e sincronizam entre dispositivos. "Baixar cópia" gera um arquivo .json de segurança; "Restaurar" repõe os dados a partir de um arquivo .json.</p>
                     </div>
 
                     </div>
@@ -1099,13 +1119,135 @@ input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}
         }
 
         function triggerImport() {
-            showToast('Seus dados já estão salvos na nuvem — não é preciso importar.');
+            const input = document.getElementById('import-file-input');
+            input.value = '';
+            input.click();
         }
 
+        let pendingImportData = null;
+
+        // Lê o arquivo, valida e abre confirmação (não grava ainda)
         function importBackup(event) {
-            // Import desabilitado: a fonte de verdade agora é o Supabase.
-            event.target.value = '';
-            showToast('Importação desativada (dados sincronizados na nuvem).');
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onerror = () => { showToast('Erro ao ler o arquivo.'); event.target.value = ''; };
+            reader.onload = function (e) {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (!imported || typeof imported !== 'object' || Array.isArray(imported)) {
+                        showToast('Formato de arquivo inválido.');
+                        event.target.value = '';
+                        return;
+                    }
+                    const clients = Array.isArray(imported.clients) ? imported.clients : [];
+                    const txns = Array.isArray(imported.transactions) ? imported.transactions : [];
+                    const hist = Array.isArray(imported.history) ? imported.history : [];
+
+                    pendingImportData = { imported, clients, txns, hist };
+
+                    // Resumo na confirmação
+                    document.getElementById('import-summary').innerHTML =
+                        `<div class="text-left text-xs space-y-1">
+                            <div class="flex justify-between"><span class="text-slate-400">Clientes no arquivo:</span><span class="text-white font-bold">${clients.length}</span></div>
+                            <div class="flex justify-between"><span class="text-slate-400">Lançamentos ativos:</span><span class="text-white font-bold">${txns.length}</span></div>
+                            <div class="flex justify-between"><span class="text-slate-400">Pagamentos no histórico:</span><span class="text-white font-bold">${hist.length}</span></div>
+                         </div>`;
+                    closeModal('modal-settings');
+                    openModal('modal-confirm-import');
+                } catch (err) {
+                    showToast('Erro ao ler o arquivo JSON.');
+                    console.error(err);
+                } finally {
+                    event.target.value = '';
+                }
+            };
+            reader.readAsText(file);
+        }
+
+        // Aplica a importação: SUBSTITUI tudo na nuvem pelos dados do arquivo
+        async function confirmImport() {
+            if (!pendingImportData) return;
+            const { imported, clients, txns, hist } = pendingImportData;
+            const btn = document.getElementById('btn-confirm-import');
+            btn.disabled = true;
+            const original = btn.textContent;
+            btn.textContent = 'Restaurando...';
+
+            try {
+                const sess = (await sb.auth.getSession()).data.session;
+                if (!sess) { showToast('Sessão expirada. Faça login.'); return; }
+                const uid = sess.user.id;
+
+                // 1) Apaga tudo do usuário (transações primeiro por causa da FK)
+                let del = await sb.from('transactions').delete().eq('user_id', uid);
+                if (del.error) throw del.error;
+                del = await sb.from('clients').delete().eq('user_id', uid);
+                if (del.error) throw del.error;
+
+                // 2) Reinsere clientes, guardando o mapa ID_antigo -> ID_novo
+                const idMap = {};
+                if (clients.length > 0) {
+                    const clientRows = clients.map(c => ({
+                        name: c.name, email: c.email || null, phone: c.phone || null
+                    }));
+                    const { data: insClients, error: cErr } = await sb.from('clients').insert(clientRows).select();
+                    if (cErr) throw cErr;
+                    // Casa pela ordem (insert preserva a ordem enviada)
+                    clients.forEach((c, i) => { idMap[c.id] = insClients[i].id; });
+                }
+
+                // 3) Reinsere transações (ativas + histórico), remapeando client_id
+                const allTxns = [
+                    ...txns.map(t => ({ ...t, _paid: false })),
+                    ...hist.map(t => ({ ...t, _paid: true }))
+                ];
+                if (allTxns.length > 0) {
+                    const txnRows = allTxns.map(t => ({
+                        client_id: idMap[t.friendId] || null,
+                        type: t.type === 'pay' ? 'pay' : 'receive',
+                        value: Number(t.value) || 0,
+                        due_date: t.dueDate || null,
+                        description: t.description || null,
+                        paid: !!t._paid,
+                        paid_at: t._paid ? (t.liquidatedAt || new Date().toISOString()) : null
+                    })).filter(r => r.client_id); // ignora órfãs sem cliente
+                    if (txnRows.length > 0) {
+                        const { error: tErr } = await sb.from('transactions').insert(txnRows);
+                        if (tErr) throw tErr;
+                    }
+                }
+
+                // 4) Restaura settings (Pix)
+                if (imported.settings && typeof imported.settings === 'object') {
+                    const s = imported.settings;
+                    await sb.from('settings').upsert({
+                        user_id: uid,
+                        pix: s.pix || '', pix_name: s.pixName || '', pix_bank: s.pixBank || '',
+                        updated_at: new Date().toISOString()
+                    }, { onConflict: 'user_id' });
+                }
+
+                // 5) Recarrega tudo da nuvem e atualiza a tela
+                await loadAllData();
+                document.getElementById('config-pix').value = state.settings.pix || '';
+                document.getElementById('config-pix-name').value = state.settings.pixName || '';
+                document.getElementById('config-pix-bank').value = state.settings.pixBank || '';
+                updateDashboard();
+                renderClients();
+                renderHistory();
+                populateClientSelects();
+
+                closeModal('modal-confirm-import');
+                showToast('Backup restaurado com sucesso!');
+            } catch (err) {
+                console.error(err);
+                showToast('Erro ao restaurar. Nada foi perdido se falhou no meio? Verifique.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = original;
+                pendingImportData = null;
+            }
         }
 
         // UI
