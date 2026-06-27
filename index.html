@@ -802,10 +802,34 @@ input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}
                 </div>
             </div>
         </div>
-        <div id="modal-settings" class="modal fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
+
+        <!-- MODAL: EDITAR CLIENTE -->
+        <div id="modal-edit-client" class="modal fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm">
             <div class="modal-content bg-slate-900 w-full max-w-md rounded-t-3xl sm:rounded-3xl border border-slate-800 p-6 flex flex-col max-h-[90vh] overflow-y-auto">
                 <div class="flex justify-between items-center mb-5">
-                    <h3 class="text-lg font-black"><i class="fa-solid fa-gear text-slate-400 mr-2"></i>Configurações</h3>
+                    <h3 class="text-lg font-black"><i class="fa-solid fa-user-pen text-yellow-500 mr-2"></i>Editar Cliente</h3>
+                    <button onclick="closeModal('modal-edit-client')" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="space-y-3">
+                    <input type="hidden" id="edit-client-id">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 mb-1 ml-1">Nome Completo *</label>
+                        <input type="text" id="edit-client-name" maxlength="80" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-yellow-500" placeholder="Nome do cliente">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 mb-1 ml-1">Telefone/WhatsApp</label>
+                        <input type="tel" id="edit-client-phone" maxlength="20" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-yellow-500" placeholder="Opcional">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-400 mb-1 ml-1">E-mail</label>
+                        <input type="email" id="edit-client-email" maxlength="120" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:border-yellow-500" placeholder="Opcional">
+                    </div>
+                    <button onclick="saveEditedClient()" class="w-full bg-yellow-500 hover:bg-yellow-400 text-slate-900 font-black rounded-xl py-3.5 mt-2 transition">
+                        Salvar Alterações
+                    </button>
+                </div>
+            </div>
+        </div>
                     <button onclick="closeModal('modal-settings')" class="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 <div class="space-y-4">
@@ -1794,7 +1818,10 @@ input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}
                                 ${pendInfo}
                             </div>
                         </div>
-                        <button onclick="deleteClient('${c.id}')" class="text-slate-500 hover:text-red-500 p-2 shrink-0"><i class="fa-solid fa-trash"></i></button>
+                        <div class="flex items-center shrink-0">
+                            <button onclick="editClient('${c.id}')" class="text-slate-500 hover:text-yellow-400 p-2"><i class="fa-solid fa-pen"></i></button>
+                            <button onclick="deleteClient('${c.id}')" class="text-slate-500 hover:text-red-500 p-2"><i class="fa-solid fa-trash"></i></button>
+                        </div>
                     </div>
                     ${quitarBtn ? `<div class="flex justify-end mt-2 pt-2 border-t border-slate-800">${quitarBtn}</div>` : ''}`;
                 list.appendChild(el);
@@ -1848,6 +1875,48 @@ input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}
             state.clients = state.clients.filter(c => c.id !== id);
             renderClients();
             populateClientSelects();
+        }
+
+        // Abre o modal de edição preenchido
+        function editClient(id) {
+            const c = state.clients.find(x => x.id === id);
+            if (!c) return;
+            document.getElementById('edit-client-id').value = c.id;
+            document.getElementById('edit-client-name').value = c.name || '';
+            document.getElementById('edit-client-phone').value = c.phone || '';
+            document.getElementById('edit-client-email').value = c.email || '';
+            openModal('modal-edit-client');
+        }
+
+        async function saveEditedClient() {
+            const id = document.getElementById('edit-client-id').value;
+            const idx = state.clients.findIndex(c => c.id === id);
+            if (idx === -1) return;
+
+            const name = document.getElementById('edit-client-name').value.trim();
+            const phone = document.getElementById('edit-client-phone').value.trim();
+            const email = document.getElementById('edit-client-email').value.trim();
+
+            if (!name) { showToast('O nome do cliente é obrigatório!'); return; }
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                showToast('E-mail inválido.');
+                return;
+            }
+
+            const { error } = await sb.from('clients').update({
+                name, email: email || null, phone: phone || null
+            }).eq('id', id);
+
+            if (error) { console.error(error); showToast('Erro ao salvar cliente.'); return; }
+
+            state.clients[idx] = { ...state.clients[idx], name, email, phone };
+            state.clients.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+            renderClients();
+            populateClientSelects();
+            updateDashboard();
+            renderHistory();
+            closeModal('modal-edit-client');
+            showToast('Cliente atualizado!');
         }
 
         function populateClientSelects() {
